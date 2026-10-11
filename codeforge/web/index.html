@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeForge</title>
+<style>
+  :root {
+    --bg: #14181f; --panel: #1f2937; --panel2: #263244; --line: #334155;
+    --text: #e5e7eb; --muted: #94a3b8; --ember: #f26b21; --ok: #34d399; --err: #f87171;
+    --kw: #f26b21; --id: #e5e7eb; --num: #fbbf24; --str: #34d399; --op: #7dd3fc; --del: #94a3b8;
+    --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: "Segoe UI", Calibri, Arial, sans-serif;
+         display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel);
+           border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+  header h1 span { color: var(--ember); }
+  header .tag { color: var(--muted); font-size: 13px; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-auto-rows: minmax(360px, auto); overflow: auto; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex;
+          flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .bar .title { font-weight: 600; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .spacer { flex: 1; }
+  select, button { font: inherit; font-size: 13px; color: var(--text); background: var(--panel2);
+                   border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button.run { background: var(--ember); border-color: var(--ember); color: #14181f; font-weight: 700; }
+  button.run:hover { filter: brightness(1.1); }
+  .editor { flex: 1; min-height: 0; display: flex; background: var(--bg); }
+  #gutter { width: 48px; padding: 12px 8px 24px 0; text-align: right; color: #64748b; font: 14px/1.6 var(--mono);
+            overflow: hidden; user-select: none; background: #10141a; border-right: 1px solid var(--line); }
+  #gutter .err { color: #fff; background: rgba(248,113,113,.35); }
+  #code { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--text);
+          font: 14px/1.6 var(--mono); padding: 12px; white-space: pre; overflow: auto; tab-size: 4; }
+  #status { padding: 8px 12px; font-size: 13px; border-top: 1px solid var(--line); }
+  #status.ok { color: var(--ok); } #status.bad { color: var(--err); }
+  #errors { max-height: 140px; overflow: auto; border-top: 1px solid var(--line); }
+  #errors:empty { display: none; }
+  .error-item { padding: 7px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .error-item:hover { background: var(--panel2); }
+  .error-item b { color: var(--err); }
+  .error-item .pos { color: var(--muted); font-family: var(--mono); }
+  .tabs { display: flex; gap: 4px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tab { border: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); padding: 8px 12px;
+         font-size: 13px; white-space: nowrap; }
+  .tab:hover { background: var(--panel2); }
+  .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--ember); }
+  .tab.pending::after { content: " \00b7 soon"; color: #64748b; font-size: 11px; }
+  #output { flex: 1; min-height: 0; overflow: auto; background: var(--bg); padding: 14px; }
+  .summary { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  table { border-collapse: collapse; width: 100%; font: 13px var(--mono); }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line);
+       position: sticky; top: -14px; background: var(--bg); }
+  td { padding: 5px 10px; border-bottom: 1px solid #1c2430; }
+  .c-keyword { color: var(--kw); } .c-identifier { color: var(--id); } .c-number { color: var(--num); }
+  .c-string { color: var(--str); } .c-operator { color: var(--op); } .c-delimiter { color: var(--del); } .c-eof { color: #64748b; }
+  .pending-box { border: 1px dashed var(--line); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); }
+  .pending-box h3 { margin: 0 0 8px; color: var(--text); }
+  pre.text { margin: 0; font: 14px/1.6 var(--mono); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Code<span>Forge</span></h1>
+  <span class="tag">A mini C compiler built from scratch in Python</span>
+</header>
+
+<main>
+  <section class="card">
+    <div class="bar">
+      <span class="title">C source</span>
+      <span class="spacer"></span>
+      <select id="samples" title="Load an example"></select>
+      <button class="run" id="run" title="Ctrl+Enter">Compile &#9654;</button>
+    </div>
+    <div class="editor">
+      <div id="gutter"></div>
+      <textarea id="code" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off"></textarea>
+    </div>
+    <div id="errors"></div>
+    <div id="status">Ready</div>
+  </section>
+
+  <section class="card">
+    <div class="bar"><span class="title">Compiler output</span></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="output"></div>
+  </section>
+</main>
+
+<script>
+const SAMPLES = {
+  "Simple program": `int main() {
+    int x = 2 + 3 * 4;
+    return x;
+}
+`,
+  "Loop and if-else": `// count down from 12
+int main() {
+    int n = 12;
+    while (n >= 10) {
+        n = n - 1;
+    }
+    if (n == 9) {
+        printf("n is %d\\n", n);
+    } else {
+        printf("other\\n");
+    }
+    return 0;
+}
+`,
+  "Lexical errors": `int main() {
+    int a = 3 @ 4;
+    int b = 12abc;
+    printf("oops);
+    return 0;
+}
+`,
+};
+
+const code = document.getElementById("code");
+const gutter = document.getElementById("gutter");
+const tabsEl = document.getElementById("tabs");
+const outputEl = document.getElementById("output");
+const errorsEl = document.getElementById("errors");
+const statusEl = document.getElementById("status");
+const samplesEl = document.getElementById("samples");
+
+let result = null, activeTab = "tokens", timer = null, seq = 0;
+
+// ---------- editor ----------
+function updateGutter() {
+  const n = code.value.split("\n").length;
+  const bad = new Set((result ? result.errors : []).map(e => e.line));
+  let html = "";
+  for (let i = 1; i <= n; i++) html += `<div class="${bad.has(i) ? "err" : ""}">${i}</div>`;
+  gutter.innerHTML = html;
+  gutter.scrollTop = code.scrollTop;
+}
+code.addEventListener("scroll", () => { gutter.scrollTop = code.scrollTop; });
+code.addEventListener("input", () => { updateGutter(); clearTimeout(timer); timer = setTimeout(compile, 400); });
+code.addEventListener("keydown", e => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const s = code.selectionStart;
+    code.setRangeText("    ", s, code.selectionEnd, "end");
+    code.dispatchEvent(new Event("input"));
+  } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault(); compile();
+  }
+});
+document.getElementById("run").addEventListener("click", compile);
+
+Object.keys(SAMPLES).forEach(name => {
+  const o = document.createElement("option"); o.textContent = name; samplesEl.appendChild(o);
+});
+samplesEl.addEventListener("change", () => { code.value = SAMPLES[samplesEl.value]; updateGutter(); compile(); });
+
+// ---------- talking to the server ----------
+async function compile() {
+  clearTimeout(timer);
+  const mine = ++seq;
+  try {
+    const res = await fetch("/api/compile", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: code.value }),
+    });
+    const data = await res.json();
+    if (mine !== seq) return;           // a newer request has already been sent
+    if (data.error) throw new Error(data.error);
+    result = data;
+  } catch (err) {
+    statusEl.className = "bad"; statusEl.textContent = "Could not reach the compiler: " + err.message;
+    return;
+  }
+  render();
+}
+
+// ---------- drawing the results ----------
+function render() {
+  updateGutter();
+  renderStatus();
+  renderErrors();
+  renderTabs();
+  renderOutput();
+}
+
+function renderStatus() {
+  const n = result.errors.length;
+  statusEl.className = n ? "bad" : "ok";
+  statusEl.textContent = n ? `\u2717 ${n} error${n > 1 ? "s" : ""} found` : "\u2713 No errors";
+}
+
+function renderErrors() {
+  errorsEl.innerHTML = "";
+  result.errors.forEach(e => {
+    const d = document.createElement("div"); d.className = "error-item";
+    const b = document.createElement("b"); b.textContent = e.phase + " error";
+    const p = document.createElement("span"); p.className = "pos"; p.textContent = `  ${e.line}:${e.column}  `;
+    d.append(b, p, document.createTextNode(e.message));
+    d.addEventListener("click", () => jumpTo(e.line, e.column));
+    errorsEl.appendChild(d);
+  });
+}
+
+function jumpTo(line, col) {
+  const lines = code.value.split("\n");
+  let offset = 0;
+  for (let i = 0; i < line - 1; i++) offset += lines[i].length + 1;
+  code.focus();
+  code.setSelectionRange(offset + col - 1, offset + col);
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  result.phases.forEach(p => {
+    const b = document.createElement("button");
+    b.className = "tab" + (p.id === activeTab ? " active" : "") + (p.status === "pending" ? " pending" : "");
+    b.textContent = p.title;
+    b.addEventListener("click", () => { activeTab = p.id; renderTabs(); renderOutput(); });
+    tabsEl.appendChild(b);
+  });
+}
+
+function renderOutput() {
+  const p = result.phases.find(x => x.id === activeTab) || result.phases[0];
+  outputEl.innerHTML = "";
+  if (p.status === "pending") {
+    outputEl.innerHTML = `<div class="pending-box"><h3>${p.title}</h3>This phase is not built yet. It will appear here once we implement it.</div>`;
+    return;
+  }
+  if (p.summary) {
+    const s = document.createElement("div"); s.className = "summary"; s.textContent = p.summary; outputEl.appendChild(s);
+  }
+  if (p.kind === "table") {
+    const t = document.createElement("table");
+    t.innerHTML = "<thead><tr><th>Line:Col</th><th>Token type</th><th>Lexeme</th></tr></thead>";
+    const body = document.createElement("tbody");
+    p.data.forEach(r => {
+      const tr = document.createElement("tr");
+      [`${r.line}:${r.column}`, r.type, r.lexeme === "" ? "(end of input)" : r.lexeme].forEach((txt, i) => {
+        const td = document.createElement("td"); td.textContent = txt;
+        if (i > 0) td.className = "c-" + r.category;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    t.appendChild(body); outputEl.appendChild(t);
+  } else {
+    const pre = document.createElement("pre"); pre.className = "text"; pre.textContent = p.data; outputEl.appendChild(pre);
+  }
+}
+
+// ---------- start ----------
+code.value = SAMPLES["Simple program"];
+updateGutter();
+compile();
+</script>
+</body>
+</html>
