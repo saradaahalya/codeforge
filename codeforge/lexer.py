@@ -148,7 +148,8 @@ class Lexer:
             self._add(SINGLE_CHAR_TOKENS[ch], ch, line, col)
             return
         self._advance()
-        self._error(f"unexpected character {ch!r}", line, col)
+        hint = f" (did you mean '{ch * 2}'?)" if ch in "&|" else ""
+        self._error(f"unexpected character {ch!r}{hint}", line, col)
 
     # ---------- main loop ----------
 

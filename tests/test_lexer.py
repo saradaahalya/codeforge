@@ -30,6 +30,17 @@ class LexerTests(unittest.TestCase):
             T.IDENTIFIER, T.SLASH, T.IDENTIFIER, T.PERCENT, T.IDENTIFIER,
             T.MINUS, T.IDENTIFIER, T.EOF])
 
+    def test_logical_operators(self):
+        got, errs = types("a && b || !c != d")
+        self.assertEqual(got, [T.IDENTIFIER, T.AND, T.IDENTIFIER, T.OR, T.NOT,
+                               T.IDENTIFIER, T.NEQ, T.IDENTIFIER, T.EOF])
+        self.assertEqual(errs, [])
+
+    def test_lone_ampersand_is_an_error_with_hint(self):
+        _, errs = types("a & b")
+        self.assertEqual(len(errs), 1)
+        self.assertIn("did you mean '&&'", errs[0].message)
+
     def test_integer_value(self):
         toks, _ = tokenize("42")
         self.assertEqual(toks[0].value, 42)

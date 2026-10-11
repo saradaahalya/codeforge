@@ -36,6 +36,11 @@ class TokenType(Enum):
     GT = auto()
     GE = auto()
 
+    # Logical operators
+    AND = auto()
+    OR = auto()
+    NOT = auto()
+
     # Delimiters
     LPAREN = auto()
     RPAREN = auto()
@@ -65,6 +70,8 @@ TWO_CHAR_OPERATORS = {
     "!=": TokenType.NEQ,
     "<=": TokenType.LE,
     ">=": TokenType.GE,
+    "&&": TokenType.AND,
+    "||": TokenType.OR,
 }
 
 SINGLE_CHAR_TOKENS = {
@@ -76,6 +83,7 @@ SINGLE_CHAR_TOKENS = {
     "=": TokenType.ASSIGN,
     "<": TokenType.LT,
     ">": TokenType.GT,
+    "!": TokenType.NOT,
     "(": TokenType.LPAREN,
     ")": TokenType.RPAREN,
     "{": TokenType.LBRACE,

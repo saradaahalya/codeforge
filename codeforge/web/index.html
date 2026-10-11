@@ -61,6 +61,23 @@
   .c-string { color: var(--str); } .c-operator { color: var(--op); } .c-delimiter { color: var(--del); } .c-eof { color: #64748b; }
   .pending-box { border: 1px dashed var(--line); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); }
   .pending-box h3 { margin: 0 0 8px; color: var(--text); }
+  .tab.skipped::after { content: " \00b7 skipped"; color: var(--err); font-size: 11px; }
+  .skipped-box { border: 1px dashed #7f3a3a; border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); }
+  .skipped-box h3 { margin: 0 0 8px; color: var(--err); }
+  .tree-tools { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .tree-tools .summary { margin: 0 auto 0 0; }
+  .tree-tools button { padding: 3px 9px; font-size: 12px; }
+  .tree { font: 14px/1.7 var(--mono); }
+  .tree details > summary { cursor: pointer; list-style-position: outside; }
+  .tree .kids { margin-left: 9px; padding-left: 16px; border-left: 1px solid var(--line); }
+  .tree .leaf { padding-left: 15px; }
+  .tree .node { cursor: pointer; border-radius: 4px; padding: 0 3px; }
+  .tree .node:hover { background: var(--panel2); }
+  .tree .role { color: #64748b; }
+  .cat-program { color: var(--ember); font-weight: 700; } .cat-declaration { color: #c4b5fd; }
+  .cat-statement { color: var(--kw); } .cat-expression { color: var(--op); }
+  .cat-literal { color: var(--num); } .cat-name { color: var(--text); }
+  .hint { color: #64748b; font-size: 12px; margin-top: 14px; }
   pre.text { margin: 0; font: 14px/1.6 var(--mono); white-space: pre-wrap; }
 </style>
 </head>
@@ -95,9 +112,21 @@
 
 <script>
 const SAMPLES = {
-  "Simple program": `int main() {
+  "Functions and logic": `int square(int n) {
+    return n * n;
+}
+
+int main() {
     int x = 2 + 3 * 4;
-    return x;
+    int y = square(x);
+    if (y > 100 && !(x == 0)) {
+        printf("big: %d\\n", y);
+    }
+    return 0;
+}
+`,
+  "Precedence demo": `int main() {
+    return 2 + 3 * 4 - -5;
 }
 `,
   "Loop and if-else": `// count down from 12
@@ -112,6 +141,13 @@ int main() {
         printf("other\\n");
     }
     return 0;
+}
+`,
+  "Syntax errors": `int main() {
+    int x = 5
+    int y = (x + 2;
+    x = ;
+    return x;
 }
 `,
   "Lexical errors": `int main() {
@@ -220,7 +256,7 @@ function renderTabs() {
   tabsEl.innerHTML = "";
   result.phases.forEach(p => {
     const b = document.createElement("button");
-    b.className = "tab" + (p.id === activeTab ? " active" : "") + (p.status === "pending" ? " pending" : "");
+    b.className = "tab" + (p.id === activeTab ? " active" : "") + (p.status === "pending" ? " pending" : "") + (p.status === "skipped" ? " skipped" : "");
     b.textContent = p.title;
     b.addEventListener("click", () => { activeTab = p.id; renderTabs(); renderOutput(); });
     tabsEl.appendChild(b);
@@ -234,6 +270,12 @@ function renderOutput() {
     outputEl.innerHTML = `<div class="pending-box"><h3>${p.title}</h3>This phase is not built yet. It will appear here once we implement it.</div>`;
     return;
   }
+  if (p.status === "skipped") {
+    outputEl.innerHTML = `<div class="skipped-box"><h3>${p.title}</h3><span id="skipmsg"></span></div>`;
+    document.getElementById("skipmsg").textContent = p.message;
+    return;
+  }
+  if (p.kind === "tree") { renderTree(p); return; }
   if (p.summary) {
     const s = document.createElement("div"); s.className = "summary"; s.textContent = p.summary; outputEl.appendChild(s);
   }
@@ -256,8 +298,39 @@ function renderOutput() {
   }
 }
 
+// ---------- AST tree view ----------
+function treeNode(n) {
+  const row = document.createElement("span"); row.className = "node";
+  if (n.role) { const r = document.createElement("span"); r.className = "role"; r.textContent = n.role + ": "; row.appendChild(r); }
+  const l = document.createElement("span"); l.className = "cat-" + n.category; l.textContent = n.label; row.appendChild(l);
+  row.title = `line ${n.line}, column ${n.column} (click to jump to the source)`;
+  row.addEventListener("click", ev => { ev.preventDefault(); jumpTo(n.line, n.column); });
+  if (!n.children.length) { const d = document.createElement("div"); d.className = "leaf"; d.appendChild(row); return d; }
+  const det = document.createElement("details"); det.open = true;
+  const sum = document.createElement("summary"); sum.appendChild(row); det.appendChild(sum);
+  const kids = document.createElement("div"); kids.className = "kids";
+  n.children.forEach(c => kids.appendChild(treeNode(c))); det.appendChild(kids);
+  return det;
+}
+
+function renderTree(p) {
+  const tools = document.createElement("div"); tools.className = "tree-tools";
+  const s = document.createElement("div"); s.className = "summary"; s.textContent = p.summary;
+  const open = document.createElement("button"); open.textContent = "Expand all";
+  const shut = document.createElement("button"); shut.textContent = "Collapse all";
+  tools.append(s, open, shut); outputEl.appendChild(tools);
+  const tree = document.createElement("div"); tree.className = "tree"; tree.appendChild(treeNode(p.data));
+  outputEl.appendChild(tree);
+  const setAll = v => tree.querySelectorAll("details").forEach(d => { d.open = v; });
+  open.addEventListener("click", () => setAll(true));
+  shut.addEventListener("click", () => setAll(false));
+  const hint = document.createElement("div"); hint.className = "hint";
+  hint.textContent = "Click a node to jump to that spot in your code. Nodes deeper in the tree are evaluated first.";
+  outputEl.appendChild(hint);
+}
+
 // ---------- start ----------
-code.value = SAMPLES["Simple program"];
+code.value = SAMPLES["Functions and logic"];
 updateGutter();
 compile();
 </script>
